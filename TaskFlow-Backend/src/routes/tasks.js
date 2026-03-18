@@ -3,6 +3,7 @@ const Task = require('../models/Task');
 const Project = require('../models/Project');
 const requireAuth = require('../middleware/requireAuth');
 const notificationService = require('../services/notificationService');
+const { httpError } = require('../utils/errors');
 
 const router = express.Router({ mergeParams: true });
 
@@ -11,7 +12,7 @@ router.use(requireAuth);
 async function ensureProjectOwned(req, res, next) {
   const project = await Project.findOne({ _id: req.params.projectId, owner: req.userId });
   if (!project) {
-    return res.status(404).json({ message: 'Project not found' });
+    return next(httpError(404, 'Project not found', { code: 'not_found.project' }));
   }
   req.project = project;
   next();
@@ -54,12 +55,12 @@ router.post('/', async (req, res) => {
   const { title, priority } = req.body;
 
   if (!title || !title.trim()) {
-    return res.status(400).json({ message: 'Title is required' });
+    throw httpError(400, 'Title is required', { code: 'validation.required' });
   }
 
   const priorityResult = validatePriority(priority);
   if (!priorityResult.ok) {
-    return res.status(400).json({ message: priorityResult.message });
+    throw httpError(400, priorityResult.message, { code: 'validation.invalid_priority' });
   }
 
   const task = await Task.create({
@@ -77,12 +78,12 @@ router.put('/:taskId', async (req, res) => {
   const { title, priority } = req.body;
 
   if (!title || !title.trim()) {
-    return res.status(400).json({ message: 'Title is required' });
+    throw httpError(400, 'Title is required', { code: 'validation.required' });
   }
 
   const priorityResult = validatePriority(priority);
   if (!priorityResult.ok) {
-    return res.status(400).json({ message: priorityResult.message });
+    throw httpError(400, priorityResult.message, { code: 'validation.invalid_priority' });
   }
 
   const update = {
@@ -100,7 +101,7 @@ router.put('/:taskId', async (req, res) => {
   );
 
   if (!task) {
-    return res.status(404).json({ message: 'Task not found' });
+    throw httpError(404, 'Task not found', { code: 'not_found.task' });
   }
 
   await notificationService.taskUpdated(req.userId, req.userEmail, task, req.project?.name);
@@ -115,7 +116,7 @@ router.delete('/:taskId', async (req, res) => {
   });
 
   if (!task) {
-    return res.status(404).json({ message: 'Task not found' });
+    throw httpError(404, 'Task not found', { code: 'not_found.task' });
   }
 
   const title = task.title;

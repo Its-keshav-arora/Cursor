@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const { httpError } = require('../utils/errors');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
 
@@ -7,15 +8,19 @@ function requireAuth(req, res, next) {
   const [, token] = authHeader.split(' ');
 
   if (!token) {
-    return res.status(401).json({ message: 'Missing Authorization header' });
+    return next(httpError(401, 'Missing Authorization header', { code: 'auth.missing_token' }));
   }
 
-  const payload = jwt.verify(token, JWT_SECRET);
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
 
-  req.userId = payload.sub;
-  req.userEmail = payload.email;
+    req.userId = payload.sub;
+    req.userEmail = payload.email;
 
-  next();
+    return next();
+  } catch (err) {
+    return next(err);
+  }
 }
 
 module.exports = requireAuth;

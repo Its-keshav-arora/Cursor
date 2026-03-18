@@ -3,6 +3,7 @@ const Project = require('../models/Project');
 const Task = require('../models/Task');
 const requireAuth = require('../middleware/requireAuth');
 const notificationService = require('../services/notificationService');
+const { httpError } = require('../utils/errors');
 
 const router = express.Router();
 
@@ -48,7 +49,7 @@ router.post('/', async (req, res) => {
   const { name, code, description } = req.body;
 
   if (!name || !code) {
-    return res.status(400).json({ message: 'Name and code are required' });
+    throw httpError(400, 'Name and code are required', { code: 'validation.required' });
   }
 
   const project = await Project.create({
@@ -67,7 +68,7 @@ router.get('/:id', async (req, res) => {
   const project = await Project.findOne({ _id: req.params.id, owner: req.userId });
 
   if (!project) {
-    return res.status(404).json({ message: 'Project not found' });
+    throw httpError(404, 'Project not found', { code: 'not_found.project' });
   }
 
   res.json({ project });
@@ -88,7 +89,7 @@ router.put('/:id', async (req, res) => {
   );
 
   if (!project) {
-    return res.status(404).json({ message: 'Project not found' });
+    throw httpError(404, 'Project not found', { code: 'not_found.project' });
   }
 
   await notificationService.projectUpdated(req.userId, req.userEmail, project);
@@ -99,7 +100,7 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   const project = await Project.findOne({ _id: req.params.id, owner: req.userId });
   if (!project) {
-    return res.status(404).json({ message: 'Project not found' });
+    throw httpError(404, 'Project not found', { code: 'not_found.project' });
   }
   const name = project.name;
   const code = project.code;

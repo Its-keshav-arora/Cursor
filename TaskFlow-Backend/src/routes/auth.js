@@ -1,6 +1,7 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { httpError } = require('../utils/errors');
 
 const router = express.Router();
 
@@ -11,12 +12,12 @@ router.post('/register', async (req, res) => {
   const { name, email, password } = req.body;
 
   if (!name || !email || !password) {
-    return res.status(400).json({ message: 'Name, email, and password are required' });
+    throw httpError(400, 'Name, email, and password are required', { code: 'validation.required' });
   }
 
   const existing = await User.findOne({ email: email.toLowerCase() });
   if (existing) {
-    return res.status(409).json({ message: 'A user with this email already exists' });
+    throw httpError(409, 'A user with this email already exists', { code: 'conflict.email' });
   }
 
   const passwordHash = await User.hashPassword(password);
@@ -26,6 +27,13 @@ router.post('/register', async (req, res) => {
     email: email.toLowerCase(),
     passwordHash,
   });
+
+  if (!JWT_SECRET) {
+    throw httpError(500, 'Server misconfiguration: missing JWT_SECRET', {
+      code: 'config.missing_jwt_secret',
+      expose: false,
+    });
+  }
 
   const token = jwt.sign(
     {
@@ -50,17 +58,24 @@ router.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
-    return res.status(400).json({ message: 'Email and password are required' });
+    throw httpError(400, 'Email and password are required', { code: 'validation.required' });
   }
 
   const user = await User.findOne({ email: email.toLowerCase() }).select('+passwordHash');
   if (!user) {
-    return res.status(401).json({ message: 'Invalid email or password' });
+    throw httpError(401, 'Invalid email or password', { code: 'auth.invalid_credentials' });
   }
 
   const isMatch = await user.comparePassword(password);
   if (!isMatch) {
-    return res.status(401).json({ message: 'Invalid email or password' });
+    throw httpError(401, 'Invalid email or password', { code: 'auth.invalid_credentials' });
+  }
+
+  if (!JWT_SECRET) {
+    throw httpError(500, 'Server misconfiguration: missing JWT_SECRET', {
+      code: 'config.missing_jwt_secret',
+      expose: false,
+    });
   }
 
   const token = jwt.sign(
@@ -87,14 +102,21 @@ router.get('/me', async (req, res) => {
   const [, token] = authHeader.split(' ');
 
   if (!token) {
-    return res.status(401).json({ message: 'Missing Authorization header' });
+    throw httpError(401, 'Missing Authorization header', { code: 'auth.missing_token' });
+  }
+
+  if (!JWT_SECRET) {
+    throw httpError(500, 'Server misconfiguration: missing JWT_SECRET', {
+      code: 'config.missing_jwt_secret',
+      expose: false,
+    });
   }
 
   const payload = jwt.verify(token, JWT_SECRET);
 
   const user = await User.findById(payload.sub);
   if (!user) {
-    return res.status(404).json({ message: 'User not found' });
+    throw httpError(404, 'User not found', { code: 'not_found.user' });
   }
 
   return res.json({
